@@ -46,12 +46,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     const port = parseInt(smtpPort, 10);
     
-    // Create SMTP client with SSL/TLS configuration
+    // Create SMTP client with STARTTLS configuration for port 587
     const client = new SMTPClient({
       connection: {
         hostname: smtpHost,
         port: port,
-        tls: port === 465, // SSL for port 465
+        tls: port === 465, // Implicit TLS for port 465
         auth: {
           username: smtpUser,
           password: smtpPass,
