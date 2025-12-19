@@ -62,7 +62,7 @@ const Sidebar = ({ isOpen, onToggle }: SidebarProps) => {
         <div className="flex flex-col h-full">
           {/* Header with Logo */}
           <div className="flex items-center justify-center h-24 px-4 border-b border-sidebar-border">
-            <img src={logo} alt="BLDR CRM" className="h-20 object-contain transform scale -125" />
+            <img src={logo} alt="BLDR CRM" className="h-30 object-contain" />
             <Button
               variant="ghost"
               size="icon"
