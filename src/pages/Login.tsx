@@ -4,14 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/BLDR-CLEAN.png";
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signIn, signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,21 +32,49 @@ const Login = () => {
       return;
     }
 
-    // Simulate authentication
-    setTimeout(() => {
-      localStorage.setItem("bldr_authenticated", "true");
-      localStorage.setItem("bldr_user", JSON.stringify({
-        name: "Admin BLDR",
-        email: email,
-        avatar: null
-      }));
-      toast({
-        title: "Login realizado",
-        description: "Bem-vindo ao BLDR CRM!",
-      });
-      navigate("/dashboard");
-      setLoading(false);
-    }, 1000);
+    if (isSignUp) {
+      if (!fullName.trim()) {
+        toast({
+          title: "Nome obrigatório",
+          description: "Por favor, informe seu nome completo.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await signUp(email, password, fullName);
+      if (error) {
+        toast({
+          title: "Erro ao criar conta",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Conta criada",
+          description: "Sua conta foi criada com sucesso!",
+        });
+        navigate("/dashboard");
+      }
+    } else {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast({
+          title: "Erro ao entrar",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login realizado",
+          description: "Bem-vindo ao BLDR CRM!",
+        });
+        navigate("/dashboard");
+      }
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -60,6 +92,23 @@ const Login = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isSignUp && (
+            <div className="space-y-2">
+              <Label htmlFor="fullName" className="text-foreground">
+                Nome Completo
+              </Label>
+              <Input
+                id="fullName"
+                type="text"
+                placeholder="Seu nome completo"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required={isSignUp}
+                className="bg-card border-border focus:border-primary focus:ring-primary"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email" className="text-foreground">
               Email
@@ -86,6 +135,7 @@ const Login = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={6}
               className="bg-card border-border focus:border-primary focus:ring-primary"
             />
           </div>
@@ -96,13 +146,24 @@ const Login = () => {
             className="w-full"
             disabled={loading}
           >
-            {loading ? "Entrando..." : "Entrar"}
+            {loading ? "Processando..." : isSignUp ? "Criar Conta" : "Entrar"}
           </Button>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Acesso restrito a colaboradores BLDR
-        </p>
+        <div className="text-center space-y-2">
+          <button
+            type="button"
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-sm text-primary hover:underline"
+          >
+            {isSignUp
+              ? "Já tem conta? Faça login"
+              : "Não tem conta? Cadastre-se"}
+          </button>
+          <p className="text-sm text-muted-foreground">
+            Acesso restrito a colaboradores BLDR
+          </p>
+        </div>
       </div>
     </div>
   );

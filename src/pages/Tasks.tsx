@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Plus, GripVertical, User } from "lucide-react";
+import { Plus, GripVertical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,114 +21,56 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import MainLayout from "@/components/layout/MainLayout";
-
-interface Task {
-  id: number;
-  title: string;
-  description: string;
-  status: "todo" | "in_progress" | "done";
-  assignee: { name: string; avatar?: string };
-  priority: "low" | "medium" | "high";
-}
-
-const mockTasks: Task[] = [
-  {
-    id: 1,
-    title: "Implementar autenticação",
-    description: "Adicionar login com Google e Apple",
-    status: "todo",
-    assignee: { name: "João Silva" },
-    priority: "high",
-  },
-  {
-    id: 2,
-    title: "Design do Dashboard",
-    description: "Criar mockups para nova versão",
-    status: "in_progress",
-    assignee: { name: "Maria Santos" },
-    priority: "medium",
-  },
-  {
-    id: 3,
-    title: "Testes de API",
-    description: "Validar endpoints de pagamento",
-    status: "in_progress",
-    assignee: { name: "Carlos Lima" },
-    priority: "high",
-  },
-  {
-    id: 4,
-    title: "Documentação",
-    description: "Atualizar README do projeto",
-    status: "done",
-    assignee: { name: "Ana Costa" },
-    priority: "low",
-  },
-];
-
-const teamMembers = [
-  { name: "João Silva" },
-  { name: "Maria Santos" },
-  { name: "Carlos Lima" },
-  { name: "Ana Costa" },
-];
+import { useTasks } from "@/hooks/useTasks";
+import { useAuth } from "@/hooks/useAuth";
 
 const columns = [
-  { id: "todo", title: "A Fazer", color: "border-muted-foreground" },
+  { id: "pending", title: "A Fazer", color: "border-muted-foreground" },
   { id: "in_progress", title: "Em Progresso", color: "border-primary" },
-  { id: "done", title: "Concluído", color: "border-success" },
+  { id: "completed", title: "Concluído", color: "border-success" },
 ];
 
 const Tasks = () => {
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+  const { tasks, loading, addTask, updateTaskStatus } = useTasks();
+  const { user } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "mine">("all");
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
     assignee: "",
-    priority: "medium" as Task["priority"],
+    priority: "medium",
   });
-
-  const currentUser = "João Silva"; // Mock current user
 
   const filteredTasks = tasks.filter((task) => {
     if (filter === "mine") {
-      return task.assignee.name === currentUser;
+      return task.user_id === user?.id;
     }
     return true;
   });
 
-  const getTasksByStatus = (status: Task["status"]) => {
+  const getTasksByStatus = (status: string) => {
     return filteredTasks.filter((task) => task.status === status);
   };
 
-  const handleAddTask = () => {
-    if (newTask.title && newTask.assignee) {
-      const newId = Math.max(...tasks.map((t) => t.id)) + 1;
-      setTasks([
-        ...tasks,
-        {
-          id: newId,
-          title: newTask.title,
-          description: newTask.description,
-          status: "todo",
-          assignee: { name: newTask.assignee },
-          priority: newTask.priority,
-        },
-      ]);
+  const handleAddTask = async () => {
+    if (newTask.title) {
+      await addTask({
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        assignee: newTask.assignee || undefined,
+      });
       setNewTask({ title: "", description: "", assignee: "", priority: "medium" });
       setIsDialogOpen(false);
     }
   };
 
-  const handleMoveTask = (taskId: number, newStatus: Task["status"]) => {
-    setTasks(
-      tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-    );
+  const handleMoveTask = async (taskId: string, newStatus: string) => {
+    await updateTaskStatus(taskId, newStatus);
   };
 
-  const getPriorityColor = (priority: Task["priority"]) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":
         return "bg-destructive/20 text-destructive";
@@ -139,6 +81,16 @@ const Tasks = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -148,7 +100,6 @@ const Tasks = () => {
             <p className="text-muted-foreground">Quadro Kanban colaborativo</p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Filter */}
             <div className="flex items-center gap-2">
               <Button
                 variant={filter === "all" ? "default" : "outline"}
@@ -200,30 +151,20 @@ const Tasks = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Responsável</Label>
-                      <Select
+                      <Label htmlFor="assignee">Responsável</Label>
+                      <Input
+                        id="assignee"
                         value={newTask.assignee}
-                        onValueChange={(value) => setNewTask({ ...newTask, assignee: value })}
-                      >
-                        <SelectTrigger className="bg-secondary border-border">
-                          <SelectValue placeholder="Selecionar" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover border-border">
-                          {teamMembers.map((member) => (
-                            <SelectItem key={member.name} value={member.name}>
-                              {member.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(e) => setNewTask({ ...newTask, assignee: e.target.value })}
+                        placeholder="Nome do responsável"
+                        className="bg-secondary border-border"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Prioridade</Label>
                       <Select
                         value={newTask.priority}
-                        onValueChange={(value: Task["priority"]) =>
-                          setNewTask({ ...newTask, priority: value })
-                        }
+                        onValueChange={(value) => setNewTask({ ...newTask, priority: value })}
                       >
                         <SelectTrigger className="bg-secondary border-border">
                           <SelectValue />
@@ -252,12 +193,12 @@ const Tasks = () => {
               <div className={`flex items-center gap-2 pb-2 border-b-2 ${column.color}`}>
                 <h3 className="font-semibold text-foreground">{column.title}</h3>
                 <span className="text-sm text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-                  {getTasksByStatus(column.id as Task["status"]).length}
+                  {getTasksByStatus(column.id).length}
                 </span>
               </div>
 
               <div className="space-y-3 min-h-[400px]">
-                {getTasksByStatus(column.id as Task["status"]).map((task) => (
+                {getTasksByStatus(column.id).map((task) => (
                   <Card
                     key={task.id}
                     className="bg-card border-border hover:border-primary/30 transition-all cursor-move"
@@ -267,23 +208,29 @@ const Tasks = () => {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h4 className="font-medium text-foreground">{task.title}</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {task.description}
-                          </p>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {task.description}
+                            </p>
+                          )}
                         </div>
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
                       </div>
 
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-xs bg-secondary">
-                              {task.assignee.name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs text-muted-foreground">
-                            {task.assignee.name}
-                          </span>
+                          {task.assignee && (
+                            <>
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-xs bg-secondary">
+                                  {task.assignee.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs text-muted-foreground">
+                                {task.assignee}
+                              </span>
+                            </>
+                          )}
                         </div>
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${getPriorityColor(
@@ -300,12 +247,12 @@ const Tasks = () => {
 
                       {/* Quick move buttons */}
                       <div className="flex gap-1 pt-2 border-t border-border">
-                        {column.id !== "todo" && (
+                        {column.id !== "pending" && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="flex-1 h-7 text-xs"
-                            onClick={() => handleMoveTask(task.id, "todo")}
+                            onClick={() => handleMoveTask(task.id, "pending")}
                           >
                             A Fazer
                           </Button>
@@ -320,12 +267,12 @@ const Tasks = () => {
                             Em Progresso
                           </Button>
                         )}
-                        {column.id !== "done" && (
+                        {column.id !== "completed" && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="flex-1 h-7 text-xs"
-                            onClick={() => handleMoveTask(task.id, "done")}
+                            onClick={() => handleMoveTask(task.id, "completed")}
                           >
                             Concluído
                           </Button>
@@ -334,6 +281,12 @@ const Tasks = () => {
                     </CardContent>
                   </Card>
                 ))}
+
+                {getTasksByStatus(column.id).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhuma tarefa
+                  </div>
+                )}
               </div>
             </div>
           ))}

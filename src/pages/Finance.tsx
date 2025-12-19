@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, ArrowUpRight, ArrowDownLeft, TrendingUp } from "lucide-react";
+import { Plus, ArrowUpRight, ArrowDownLeft, TrendingUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -29,71 +28,33 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import MainLayout from "@/components/layout/MainLayout";
+import { useTransactions } from "@/hooks/useTransactions";
 
-interface Transaction {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  category: string;
-  type: "income" | "expense";
-  recurring?: "monthly" | "yearly";
-}
-
-const mockIncomes: Transaction[] = [
-  { id: 1, description: "Assinaturas Apple", amount: 45000, date: "2024-01-15", category: "Assinaturas", type: "income" },
-  { id: 2, description: "Pagamentos Stripe", amount: 32000, date: "2024-01-14", category: "Pagamentos", type: "income" },
-  { id: 3, description: "Licenças Enterprise", amount: 15000, date: "2024-01-10", category: "B2B", type: "income" },
-];
-
-const mockExpenses: Transaction[] = [
-  { id: 1, description: "Servidores AWS", amount: 8500, date: "2024-01-15", category: "Infraestrutura", type: "expense", recurring: "monthly" },
-  { id: 2, description: "Folha de Pagamento", amount: 45000, date: "2024-01-05", category: "RH", type: "expense", recurring: "monthly" },
-  { id: 3, description: "Marketing Digital", amount: 12000, date: "2024-01-12", category: "Marketing", type: "expense" },
-  { id: 4, description: "Ferramentas SaaS", amount: 3200, date: "2024-01-08", category: "Software", type: "expense", recurring: "monthly" },
-];
-
-const categories = ["Infraestrutura", "RH", "Marketing", "Software", "Jurídico", "Outros"];
+const categories = ["Infraestrutura", "RH", "Marketing", "Software", "Jurídico", "Vendas", "Outros"];
 
 const Finance = () => {
-  const [expenses, setExpenses] = useState<Transaction[]>(mockExpenses);
+  const { transactions, loading, addTransaction, totalIncome, totalExpenses } = useTransactions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newExpense, setNewExpense] = useState({
+  const [transactionType, setTransactionType] = useState<"income" | "expense">("expense");
+  const [newTransaction, setNewTransaction] = useState({
     description: "",
     amount: "",
     date: "",
     category: "",
-    recurring: false,
-    recurringType: "monthly" as "monthly" | "yearly",
   });
 
-  const totalIncome = mockIncomes.reduce((sum, t) => sum + t.amount, 0);
-  const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
   const netProfit = totalIncome - totalExpenses;
 
-  const handleAddExpense = () => {
-    if (newExpense.description && newExpense.amount && newExpense.date && newExpense.category) {
-      const newId = Math.max(...expenses.map((e) => e.id)) + 1;
-      setExpenses([
-        ...expenses,
-        {
-          id: newId,
-          description: newExpense.description,
-          amount: parseFloat(newExpense.amount),
-          date: newExpense.date,
-          category: newExpense.category,
-          type: "expense",
-          recurring: newExpense.recurring ? newExpense.recurringType : undefined,
-        },
-      ]);
-      setNewExpense({
-        description: "",
-        amount: "",
-        date: "",
-        category: "",
-        recurring: false,
-        recurringType: "monthly",
+  const handleAddTransaction = async () => {
+    if (newTransaction.description && newTransaction.amount && newTransaction.date) {
+      await addTransaction({
+        description: newTransaction.description,
+        amount: parseFloat(newTransaction.amount),
+        type: transactionType,
+        category: newTransaction.category || undefined,
+        date: newTransaction.date,
       });
+      setNewTransaction({ description: "", amount: "", date: "", category: "" });
       setIsDialogOpen(false);
     }
   };
@@ -104,6 +65,19 @@ const Finance = () => {
       currency: "BRL",
     }).format(value);
   };
+
+  const incomes = transactions.filter((t) => t.type === "income");
+  const expenses = transactions.filter((t) => t.type === "expense");
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -157,65 +131,38 @@ const Finance = () => {
                   <TrendingUp className="h-5 w-5 text-primary" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-primary">{formatCurrency(netProfit)}</div>
+                  <div className={`text-2xl font-bold ${netProfit >= 0 ? "text-primary" : "text-destructive"}`}>
+                    {formatCurrency(netProfit)}
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
           <TabsContent value="income" className="space-y-6">
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-foreground">Receitas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border">
-                      <TableHead className="text-muted-foreground">Descrição</TableHead>
-                      <TableHead className="text-muted-foreground">Categoria</TableHead>
-                      <TableHead className="text-muted-foreground">Data</TableHead>
-                      <TableHead className="text-right text-muted-foreground">Valor</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockIncomes.map((income) => (
-                      <TableRow key={income.id} className="border-border">
-                        <TableCell className="font-medium text-foreground">{income.description}</TableCell>
-                        <TableCell className="text-muted-foreground">{income.category}</TableCell>
-                        <TableCell className="text-muted-foreground">{income.date}</TableCell>
-                        <TableCell className="text-right text-success font-medium">
-                          {formatCurrency(income.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="expenses" className="space-y-6">
             <div className="flex justify-end">
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog open={isDialogOpen && transactionType === "income"} onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (open) setTransactionType("income");
+              }}>
                 <DialogTrigger asChild>
-                  <Button variant="gold">
+                  <Button variant="gold" onClick={() => setTransactionType("income")}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Despesa
+                    Adicionar Receita
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-card border-border">
                   <DialogHeader>
-                    <DialogTitle className="text-foreground">Nova Despesa</DialogTitle>
+                    <DialogTitle className="text-foreground">Nova Receita</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="description">Descrição</Label>
                       <Input
                         id="description"
-                        value={newExpense.description}
-                        onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
-                        placeholder="Ex: Servidores AWS"
+                        value={newTransaction.description}
+                        onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
+                        placeholder="Ex: Venda de serviços"
                         className="bg-secondary border-border"
                       />
                     </div>
@@ -225,8 +172,8 @@ const Finance = () => {
                         <Input
                           id="amount"
                           type="number"
-                          value={newExpense.amount}
-                          onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                          value={newTransaction.amount}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, amount: e.target.value })}
                           placeholder="0,00"
                           className="bg-secondary border-border"
                         />
@@ -236,8 +183,8 @@ const Finance = () => {
                         <Input
                           id="date"
                           type="date"
-                          value={newExpense.date}
-                          onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                          value={newTransaction.date}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
                           className="bg-secondary border-border"
                         />
                       </div>
@@ -245,8 +192,8 @@ const Finance = () => {
                     <div className="space-y-2">
                       <Label>Categoria</Label>
                       <Select
-                        value={newExpense.category}
-                        onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}
+                        value={newTransaction.category}
+                        onValueChange={(value) => setNewTransaction({ ...newTransaction, category: value })}
                       >
                         <SelectTrigger className="bg-secondary border-border">
                           <SelectValue placeholder="Selecionar categoria" />
@@ -260,34 +207,120 @@ const Finance = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="recurring">Recorrente</Label>
-                      <Switch
-                        id="recurring"
-                        checked={newExpense.recurring}
-                        onCheckedChange={(checked) => setNewExpense({ ...newExpense, recurring: checked })}
+                    <Button variant="gold" className="w-full" onClick={handleAddTransaction}>
+                      Adicionar Receita
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Receitas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {incomes.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhuma receita registrada
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border">
+                        <TableHead className="text-muted-foreground">Descrição</TableHead>
+                        <TableHead className="text-muted-foreground">Categoria</TableHead>
+                        <TableHead className="text-muted-foreground">Data</TableHead>
+                        <TableHead className="text-right text-muted-foreground">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {incomes.map((income) => (
+                        <TableRow key={income.id} className="border-border">
+                          <TableCell className="font-medium text-foreground">{income.description}</TableCell>
+                          <TableCell className="text-muted-foreground">{income.category || "-"}</TableCell>
+                          <TableCell className="text-muted-foreground">{income.date}</TableCell>
+                          <TableCell className="text-right text-success font-medium">
+                            {formatCurrency(Number(income.amount))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="expenses" className="space-y-6">
+            <div className="flex justify-end">
+              <Dialog open={isDialogOpen && transactionType === "expense"} onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (open) setTransactionType("expense");
+              }}>
+                <DialogTrigger asChild>
+                  <Button variant="gold" onClick={() => setTransactionType("expense")}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Despesa
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card border-border">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">Nova Despesa</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Descrição</Label>
+                      <Input
+                        id="description"
+                        value={newTransaction.description}
+                        onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
+                        placeholder="Ex: Servidores AWS"
+                        className="bg-secondary border-border"
                       />
                     </div>
-                    {newExpense.recurring && (
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Frequência</Label>
-                        <Select
-                          value={newExpense.recurringType}
-                          onValueChange={(value: "monthly" | "yearly") =>
-                            setNewExpense({ ...newExpense, recurringType: value })
-                          }
-                        >
-                          <SelectTrigger className="bg-secondary border-border">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover border-border">
-                            <SelectItem value="monthly">Mensal</SelectItem>
-                            <SelectItem value="yearly">Anual</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="amount">Valor (R$)</Label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          value={newTransaction.amount}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, amount: e.target.value })}
+                          placeholder="0,00"
+                          className="bg-secondary border-border"
+                        />
                       </div>
-                    )}
-                    <Button variant="gold" className="w-full" onClick={handleAddExpense}>
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Data</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={newTransaction.date}
+                          onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                          className="bg-secondary border-border"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Categoria</Label>
+                      <Select
+                        value={newTransaction.category}
+                        onValueChange={(value) => setNewTransaction({ ...newTransaction, category: value })}
+                      >
+                        <SelectTrigger className="bg-secondary border-border">
+                          <SelectValue placeholder="Selecionar categoria" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border-border">
+                          {categories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button variant="gold" className="w-full" onClick={handleAddTransaction}>
                       Adicionar Despesa
                     </Button>
                   </div>
@@ -300,36 +333,34 @@ const Finance = () => {
                 <CardTitle className="text-foreground">Despesas</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border">
-                      <TableHead className="text-muted-foreground">Descrição</TableHead>
-                      <TableHead className="text-muted-foreground">Categoria</TableHead>
-                      <TableHead className="text-muted-foreground">Data</TableHead>
-                      <TableHead className="text-muted-foreground">Recorrência</TableHead>
-                      <TableHead className="text-right text-muted-foreground">Valor</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {expenses.map((expense) => (
-                      <TableRow key={expense.id} className="border-border">
-                        <TableCell className="font-medium text-foreground">{expense.description}</TableCell>
-                        <TableCell className="text-muted-foreground">{expense.category}</TableCell>
-                        <TableCell className="text-muted-foreground">{expense.date}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {expense.recurring === "monthly"
-                            ? "Mensal"
-                            : expense.recurring === "yearly"
-                            ? "Anual"
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right text-destructive font-medium">
-                          {formatCurrency(expense.amount)}
-                        </TableCell>
+                {expenses.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhuma despesa registrada
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border">
+                        <TableHead className="text-muted-foreground">Descrição</TableHead>
+                        <TableHead className="text-muted-foreground">Categoria</TableHead>
+                        <TableHead className="text-muted-foreground">Data</TableHead>
+                        <TableHead className="text-right text-muted-foreground">Valor</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {expenses.map((expense) => (
+                        <TableRow key={expense.id} className="border-border">
+                          <TableCell className="font-medium text-foreground">{expense.description}</TableCell>
+                          <TableCell className="text-muted-foreground">{expense.category || "-"}</TableCell>
+                          <TableCell className="text-muted-foreground">{expense.date}</TableCell>
+                          <TableCell className="text-right text-destructive font-medium">
+                            {formatCurrency(Number(expense.amount))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
