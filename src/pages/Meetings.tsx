@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Check, X, Clock, Video, Users, FileText } from "lucide-react";
+import { Plus, Check, X, Clock, Users, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,98 +12,36 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import MainLayout from "@/components/layout/MainLayout";
-
-interface Meeting {
-  id: number;
-  title: string;
-  date: string;
-  time: string;
-  participants: { name: string; avatar?: string }[];
-  status: "pending" | "accepted" | "declined" | "suggested";
-  description: string;
-  notes: string;
-}
-
-const mockMeetings: Meeting[] = [
-  {
-    id: 1,
-    title: "Review do Q1 2024",
-    date: "2024-01-20",
-    time: "14:00",
-    participants: [
-      { name: "João Silva" },
-      { name: "Maria Santos" },
-      { name: "Carlos Lima" },
-    ],
-    status: "pending",
-    description: "Revisão dos resultados do primeiro trimestre",
-    notes: "",
-  },
-  {
-    id: 2,
-    title: "Alinhamento de Produto",
-    date: "2024-01-22",
-    time: "10:00",
-    participants: [{ name: "Ana Costa" }, { name: "Pedro Alves" }],
-    status: "accepted",
-    description: "Discussão sobre roadmap de features",
-    notes: "Priorizar features de engagement",
-  },
-  {
-    id: 3,
-    title: "Reunião com Investidores",
-    date: "2024-01-25",
-    time: "16:00",
-    participants: [{ name: "Investor Group" }],
-    status: "pending",
-    description: "Apresentação de métricas e próximos passos",
-    notes: "",
-  },
-];
+import { useMeetings } from "@/hooks/useMeetings";
 
 const Meetings = () => {
-  const [meetings, setMeetings] = useState<Meeting[]>(mockMeetings);
+  const { meetings, loading, addMeeting, updateMeetingStatus } = useMeetings();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [newMeeting, setNewMeeting] = useState({
     title: "",
     date: "",
-    time: "",
+    start_time: "",
     description: "",
+    location: "",
   });
 
-  const handleStatusChange = (meetingId: number, newStatus: Meeting["status"]) => {
-    setMeetings(
-      meetings.map((m) => (m.id === meetingId ? { ...m, status: newStatus } : m))
-    );
-  };
-
-  const handleAddMeeting = () => {
-    if (newMeeting.title && newMeeting.date && newMeeting.time) {
-      const newId = Math.max(...meetings.map((m) => m.id)) + 1;
-      setMeetings([
-        ...meetings,
-        {
-          id: newId,
-          ...newMeeting,
-          participants: [],
-          status: "pending",
-          notes: "",
-        },
-      ]);
-      setNewMeeting({ title: "", date: "", time: "", description: "" });
+  const handleAddMeeting = async () => {
+    if (newMeeting.title && newMeeting.date && newMeeting.start_time) {
+      await addMeeting({
+        title: newMeeting.title,
+        date: newMeeting.date,
+        start_time: newMeeting.start_time,
+        description: newMeeting.description || undefined,
+        location: newMeeting.location || undefined,
+      });
+      setNewMeeting({ title: "", date: "", start_time: "", description: "", location: "" });
       setIsDialogOpen(false);
     }
   };
 
-  const handleUpdateNotes = (meetingId: number, notes: string) => {
-    setMeetings(meetings.map((m) => (m.id === meetingId ? { ...m, notes } : m)));
-  };
-
-  const getStatusBadge = (status: Meeting["status"]) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "accepted":
         return <Badge className="bg-success text-success-foreground">Aceito</Badge>;
@@ -112,9 +50,19 @@ const Meetings = () => {
       case "suggested":
         return <Badge className="bg-primary text-primary-foreground">Nova Data Sugerida</Badge>;
       default:
-        return <Badge variant="secondary">Pendente</Badge>;
+        return <Badge variant="secondary">Agendado</Badge>;
     }
   };
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -162,11 +110,21 @@ const Meetings = () => {
                     <Input
                       id="time"
                       type="time"
-                      value={newMeeting.time}
-                      onChange={(e) => setNewMeeting({ ...newMeeting, time: e.target.value })}
+                      value={newMeeting.start_time}
+                      onChange={(e) => setNewMeeting({ ...newMeeting, start_time: e.target.value })}
                       className="bg-secondary border-border"
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Local</Label>
+                  <Input
+                    id="location"
+                    value={newMeeting.location}
+                    onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })}
+                    placeholder="Local ou link da reunião"
+                    className="bg-secondary border-border"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Descrição</Label>
@@ -187,92 +145,75 @@ const Meetings = () => {
         </div>
 
         {/* Meetings List */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {meetings.map((meeting) => (
-            <Card key={meeting.id} className="bg-card border-border">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-lg text-foreground">{meeting.title}</CardTitle>
-                  {getStatusBadge(meeting.status)}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {meeting.date} às {meeting.time}
+        {meetings.length === 0 ? (
+          <div className="text-center py-16">
+            <Users className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
+            <p className="text-muted-foreground">Nenhuma reunião agendada</p>
+            <p className="text-sm text-muted-foreground">
+              Clique em "Nova Reunião" para agendar
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {meetings.map((meeting) => (
+              <Card key={meeting.id} className="bg-card border-border">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-lg text-foreground">{meeting.title}</CardTitle>
+                    {getStatusBadge(meeting.status)}
                   </div>
-                </div>
-
-                <p className="text-sm text-foreground">{meeting.description}</p>
-
-                {/* Participants */}
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex -space-x-2">
-                    {meeting.participants.slice(0, 3).map((p, idx) => (
-                      <Avatar key={idx} className="h-6 w-6 border-2 border-card">
-                        <AvatarFallback className="text-xs bg-secondary">
-                          {p.name.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {meeting.participants.length > 3 && (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        +{meeting.participants.length - 3}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Notes (Rich Text Area) */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <FileText className="h-3 w-3" />
-                    Ata da Reunião
-                  </Label>
-                  <Textarea
-                    value={meeting.notes}
-                    onChange={(e) => handleUpdateNotes(meeting.id, e.target.value)}
-                    placeholder="Adicionar notas..."
-                    className="bg-secondary border-border text-sm min-h-[60px]"
-                  />
-                </div>
-
-                {/* RSVP Actions */}
-                {meeting.status === "pending" && (
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="success"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleStatusChange(meeting.id, "accepted")}
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      Aceitar
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleStatusChange(meeting.id, "declined")}
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Recusar
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleStatusChange(meeting.id, "suggested")}
-                    >
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
-                    </Button>
+                      {meeting.date} às {meeting.start_time}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+
+                  {meeting.location && (
+                    <p className="text-sm text-muted-foreground">📍 {meeting.location}</p>
+                  )}
+
+                  {meeting.description && (
+                    <p className="text-sm text-foreground">{meeting.description}</p>
+                  )}
+
+                  {/* RSVP Actions */}
+                  {meeting.status === "scheduled" && (
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => updateMeetingStatus(meeting.id, "accepted")}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Aceitar
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => updateMeetingStatus(meeting.id, "declined")}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Recusar
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => updateMeetingStatus(meeting.id, "suggested")}
+                      >
+                        <Clock className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </MainLayout>
   );

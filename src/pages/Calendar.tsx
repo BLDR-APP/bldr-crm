@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -7,31 +7,17 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import MainLayout from "@/components/layout/MainLayout";
-
-interface Event {
-  id: number;
-  title: string;
-  date: string;
-  type: "meeting" | "deadline" | "payment";
-}
-
-const mockEvents: Event[] = [
-  { id: 1, title: "Reunião com investidores", date: "2024-01-15", type: "meeting" },
-  { id: 2, title: "Entrega do projeto Alpha", date: "2024-01-18", type: "deadline" },
-  { id: 3, title: "Pagamento fornecedor", date: "2024-01-20", type: "payment" },
-  { id: 4, title: "Review trimestral", date: "2024-01-25", type: "meeting" },
-];
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 
 const Calendar = () => {
+  const { events, loading, addEvent } = useCalendarEvents();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [events, setEvents] = useState<Event[]>(mockEvents);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: "", description: "" });
 
@@ -64,7 +50,7 @@ const Calendar = () => {
 
   const getEventsForDay = (day: number) => {
     const dateStr = formatDate(day);
-    return events.filter((event) => event.date === dateStr);
+    return events.filter((event) => event.start_date.startsWith(dateStr));
   };
 
   const isToday = (day: number) => {
@@ -76,18 +62,13 @@ const Calendar = () => {
     );
   };
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (selectedDate && newEvent.title) {
-      const newId = Math.max(...events.map((e) => e.id)) + 1;
-      setEvents([
-        ...events,
-        {
-          id: newId,
-          title: newEvent.title,
-          date: selectedDate,
-          type: "meeting",
-        },
-      ]);
+      await addEvent({
+        title: newEvent.title,
+        description: newEvent.description || undefined,
+        start_date: `${selectedDate}T00:00:00`,
+      });
       setNewEvent({ title: "", description: "" });
       setIsDialogOpen(false);
     }
@@ -95,7 +76,7 @@ const Calendar = () => {
 
   const renderCalendarDays = () => {
     const days = [];
-    const totalCells = 42; // 6 rows x 7 columns
+    const totalCells = 42;
 
     for (let i = 0; i < totalCells; i++) {
       const dayNumber = i - startingDay + 1;
@@ -134,13 +115,8 @@ const Calendar = () => {
                 {dayEvents.slice(0, 2).map((event) => (
                   <div
                     key={event.id}
-                    className={`text-xs p-1 rounded truncate ${
-                      event.type === "meeting"
-                        ? "bg-primary/20 text-primary"
-                        : event.type === "deadline"
-                        ? "bg-destructive/20 text-destructive"
-                        : "bg-success/20 text-success"
-                    }`}
+                    className="text-xs p-1 rounded truncate bg-primary/20 text-primary"
+                    style={{ backgroundColor: `${event.color}20`, color: event.color }}
                   >
                     {event.title}
                   </div>
@@ -159,6 +135,16 @@ const Calendar = () => {
 
     return days;
   };
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>

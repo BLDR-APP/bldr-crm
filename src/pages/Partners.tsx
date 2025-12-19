@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Edit, Trash2, Building, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Building, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,95 +28,110 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import MainLayout from "@/components/layout/MainLayout";
+import { usePartners } from "@/hooks/usePartners";
 
-interface Partner {
-  id: number;
-  name: string;
-  type: "Fornecedor" | "Distribuidor" | "Parceiro Estratégico" | "Investidor";
-  status: "Ativo" | "Inativo" | "Pendente";
-  contact: string;
-}
+const partnerTypes = ["client", "supplier", "distributor", "strategic", "investor"];
+const statusOptions = ["active", "inactive", "pending"];
 
-const mockPartners: Partner[] = [
-  { id: 1, name: "Apple Inc.", type: "Distribuidor", status: "Ativo", contact: "partners@apple.com" },
-  { id: 2, name: "Stripe", type: "Fornecedor", status: "Ativo", contact: "enterprise@stripe.com" },
-  { id: 3, name: "AWS", type: "Fornecedor", status: "Ativo", contact: "support@aws.com" },
-  { id: 4, name: "Gympass", type: "Parceiro Estratégico", status: "Pendente", contact: "parcerias@gympass.com" },
-  { id: 5, name: "Sequoia Capital", type: "Investidor", status: "Ativo", contact: "deals@sequoiacap.com" },
-];
+const typeLabels: Record<string, string> = {
+  client: "Cliente",
+  supplier: "Fornecedor",
+  distributor: "Distribuidor",
+  strategic: "Parceiro Estratégico",
+  investor: "Investidor",
+};
 
-const partnerTypes = ["Fornecedor", "Distribuidor", "Parceiro Estratégico", "Investidor"];
-const statusOptions = ["Ativo", "Inativo", "Pendente"];
+const statusLabels: Record<string, string> = {
+  active: "Ativo",
+  inactive: "Inativo",
+  pending: "Pendente",
+};
 
 const Partners = () => {
-  const [partners, setPartners] = useState<Partner[]>(mockPartners);
+  const { partners, loading, addPartner, updatePartner, deletePartner } = usePartners();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  const [editingPartner, setEditingPartner] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     type: "",
     status: "",
-    contact: "",
+    email: "",
+    phone: "",
+    company: "",
   });
 
-  const handleOpenDialog = (partner?: Partner) => {
-    if (partner) {
-      setEditingPartner(partner);
-      setFormData({
-        name: partner.name,
-        type: partner.type,
-        status: partner.status,
-        contact: partner.contact,
-      });
+  const handleOpenDialog = (partnerId?: string) => {
+    if (partnerId) {
+      const partner = partners.find((p) => p.id === partnerId);
+      if (partner) {
+        setEditingPartner(partnerId);
+        setFormData({
+          name: partner.name,
+          type: partner.type,
+          status: partner.status,
+          email: partner.email || "",
+          phone: partner.phone || "",
+          company: partner.company || "",
+        });
+      }
     } else {
       setEditingPartner(null);
-      setFormData({ name: "", type: "", status: "", contact: "" });
+      setFormData({ name: "", type: "", status: "", email: "", phone: "", company: "" });
     }
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (formData.name && formData.type && formData.status) {
       if (editingPartner) {
-        setPartners(
-          partners.map((p) =>
-            p.id === editingPartner.id
-              ? { ...p, ...formData, type: formData.type as Partner["type"], status: formData.status as Partner["status"] }
-              : p
-          )
-        );
+        await updatePartner(editingPartner, {
+          name: formData.name,
+          type: formData.type,
+          status: formData.status,
+          email: formData.email || null,
+          phone: formData.phone || null,
+          company: formData.company || null,
+        });
       } else {
-        const newId = Math.max(...partners.map((p) => p.id)) + 1;
-        setPartners([
-          ...partners,
-          {
-            id: newId,
-            ...formData,
-            type: formData.type as Partner["type"],
-            status: formData.status as Partner["status"],
-          },
-        ]);
+        await addPartner({
+          name: formData.name,
+          type: formData.type,
+          status: formData.status,
+          email: formData.email || undefined,
+          phone: formData.phone || undefined,
+          company: formData.company || undefined,
+        });
       }
       setIsDialogOpen(false);
-      setFormData({ name: "", type: "", status: "", contact: "" });
+      setFormData({ name: "", type: "", status: "", email: "", phone: "", company: "" });
       setEditingPartner(null);
     }
   };
 
-  const handleDelete = (id: number) => {
-    setPartners(partners.filter((p) => p.id !== id));
+  const handleDelete = async (id: string) => {
+    await deletePartner(id);
   };
 
-  const getStatusBadge = (status: Partner["status"]) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case "Ativo":
+      case "active":
         return <Badge className="bg-success text-success-foreground">Ativo</Badge>;
-      case "Inativo":
+      case "inactive":
         return <Badge className="bg-destructive text-destructive-foreground">Inativo</Badge>;
       default:
         return <Badge className="bg-primary text-primary-foreground">Pendente</Badge>;
     }
   };
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -162,7 +177,7 @@ const Partners = () => {
                     <SelectContent className="bg-popover border-border">
                       {partnerTypes.map((type) => (
                         <SelectItem key={type} value={type}>
-                          {type}
+                          {typeLabels[type]}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -180,19 +195,30 @@ const Partners = () => {
                     <SelectContent className="bg-popover border-border">
                       {statusOptions.map((status) => (
                         <SelectItem key={status} value={status}>
-                          {status}
+                          {statusLabels[status]}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contact">Contato</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="contact"
-                    value={formData.contact}
-                    onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="email@empresa.com"
+                    className="bg-secondary border-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="(11) 99999-9999"
                     className="bg-secondary border-border"
                   />
                 </div>
@@ -212,45 +238,54 @@ const Partners = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border">
-                  <TableHead className="text-muted-foreground">Nome</TableHead>
-                  <TableHead className="text-muted-foreground">Tipo</TableHead>
-                  <TableHead className="text-muted-foreground">Contato</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-right text-muted-foreground">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {partners.map((partner) => (
-                  <TableRow key={partner.id} className="border-border">
-                    <TableCell className="font-medium text-foreground">{partner.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{partner.type}</TableCell>
-                    <TableCell className="text-muted-foreground">{partner.contact}</TableCell>
-                    <TableCell>{getStatusBadge(partner.status)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenDialog(partner)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(partner.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            {partners.length === 0 ? (
+              <div className="text-center py-8">
+                <Building className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                <p className="text-muted-foreground">Nenhum parceiro cadastrado</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border">
+                    <TableHead className="text-muted-foreground">Nome</TableHead>
+                    <TableHead className="text-muted-foreground">Tipo</TableHead>
+                    <TableHead className="text-muted-foreground">Contato</TableHead>
+                    <TableHead className="text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-right text-muted-foreground">Ações</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {partners.map((partner) => (
+                    <TableRow key={partner.id} className="border-border">
+                      <TableCell className="font-medium text-foreground">{partner.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {typeLabels[partner.type] || partner.type}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{partner.email || "-"}</TableCell>
+                      <TableCell>{getStatusBadge(partner.status)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenDialog(partner.id)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(partner.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
