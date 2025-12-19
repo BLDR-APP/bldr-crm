@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import logo from "@/assets/BLDR.png";
+import logo from "@/assets/BLDR-CLEAN.png";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -61,8 +61,8 @@ const Sidebar = ({ isOpen, onToggle }: SidebarProps) => {
       >
         <div className="flex flex-col h-full">
           {/* Header with Logo */}
-          <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
-            <img src={logo} alt="BLDR CRM" className="h-10 object-contain" />
+          <div className="flex items-center justify-between h-24 px-4 border-b border-sidebar-border">
+            <img src={logo} alt="BLDR CRM" className="h-20 object-contain" />
             <Button
               variant="ghost"
               size="icon"

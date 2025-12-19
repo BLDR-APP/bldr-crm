@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import logo from "@/assets/BLDR.png";
+import logo from "@/assets/BLDR-CLEAN.png";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -52,7 +52,7 @@ const Login = () => {
           <img
             src={logo}
             alt="BLDR CRM"
-            className="h-16 object-contain"
+            className="h-32 md:h-40 object-contain"
           />
           <p className="text-muted-foreground text-sm">
             Painel Administrativo Corporativo
